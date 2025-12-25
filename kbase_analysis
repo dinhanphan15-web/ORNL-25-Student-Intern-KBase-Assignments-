@@ -1,0 +1,71 @@
+KBase provides JSON-formatted metadata for Metagenome-Assembled Genomes. This script extracts and summarizes key genomic features across multiple MAGs.
+
+import os
+import re
+import pandas as pd
+
+folder = "kaiju_report"
+tax_levels = ["species", "genus", "family", "order", "class", "phylum"]
+
+pattern = re.compile(
+    r"^(?P<sample>.+)_reads-\d+-(?P<tax_level>species|genus|family|order|class|phylum)(?:-longtail)?\.kaijuReport$"
+)
+
+data = {level: {} for level in tax_levels}
+files = os.listdir(folder)
+print(f"Found {len(files)} files in '{folder}'")
+
+matched_files = 0
+
+for filename in files:
+    match = pattern.match(filename)
+    if not match:
+        print(f"Skipped file (no match): {filename}")
+        continue
+    
+    matched_files += 1
+    sample = match.group("sample")
+    tax_level = match.group("tax_level")
+    filepath = os.path.join(folder, filename)
+    print(f"Processing file: {filename} -> Sample: {sample}, Tax Level: {tax_level}")
+    
+    try:
+        df = pd.read_csv(filepath, sep="\t", header=0)
+    except Exception as e:
+        print(f"Failed to read {filename}: {e}")
+        continue
+
+    if not {'taxon_name', 'reads'}.issubset(df.columns):
+        print(f"File {filename} missing required columns")
+        continue
+
+    df = df[['taxon_name', 'reads']].dropna()
+    df = df.groupby('taxon_name')['reads'].sum()
+
+    # Store each taxon count under its sample
+    data[tax_level][sample] = df
+
+print(f"\nTotal matched files processed: {matched_files}")
+
+if matched_files > 0:
+    with pd.ExcelWriter("kaiju_summary_transposed.xlsx", engine='xlsxwriter') as writer:
+        for tax_level in tax_levels:
+            if not data[tax_level]:
+                continue
+
+            combined_df = pd.DataFrame(data[tax_level]).T.fillna(0).astype(int)
+
+            combined_df['Total_Reads'] = combined_df.sum(axis=1)
+            percent_df = combined_df.drop(columns='Total_Reads').div(combined_df['Total_Reads'], axis=0) * 100
+            percent_df = percent_df.round(2)
+            percent_df.columns = [f"{col}_%" for col in percent_df.columns]
+
+            final_df = pd.concat([combined_df, percent_df], axis=1).reset_index().rename(columns={"index": "Sample"})
+
+            final_df.to_excel(writer, sheet_name=tax_level[:31], index=False)
+            print(f"Written '{tax_level}' sheet with {final_df.shape[0]} samples")
+
+    print("Saved transposed Kaiju summary to 'kaiju_summary_transposed.xlsx'")
+else:
+    print("No matching files were processed.")
+
