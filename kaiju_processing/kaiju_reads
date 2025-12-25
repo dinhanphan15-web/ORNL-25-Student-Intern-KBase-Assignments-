@@ -1,0 +1,85 @@
+This script processes Kaiju regular and longtail reports and summarizes read counts at the class and phylum level.
+
+
+
+
+
+import os
+import re
+import pandas as pd
+
+folder = "kaiju_report"
+
+tax_levels = ["species", "genus", "family", "order", "class", "phylum"]
+
+
+pattern = re.compile(
+    r"^(?P<sample>.+)_reads-\d+-(?P<tax_level>species|genus|family|order|class|phylum)(?:-longtail)?\.kaijuReport$"
+)
+
+data = {level: {} for level in tax_levels}
+
+files = os.listdir(folder)
+print(f"Found {len(files)} files in '{folder}'")
+
+matched_files = 0
+
+for filename in files:
+    match = pattern.match(filename)
+    if not match:
+        print(f"Skipped file (no match): {filename}")
+        continue
+    
+    matched_files += 1
+    sample = match.group("sample")
+    tax_level = match.group("tax_level")
+    filepath = os.path.join(folder, filename)
+    print(f"Processing file: {filename} -> Sample: {sample}, Tax Level: {tax_level}")
+    
+    try:
+        df = pd.read_csv(filepath, sep="\t", header=0)
+    except Exception as e:
+        print(f"Failed to read {filename}: {e}")
+        continue
+    
+    if not {'taxon_name', 'reads'}.issubset(df.columns):
+        print(f"File {filename} missing required columns 'taxon_name' and 'reads'")
+        continue
+    
+    grouped_reads = df.groupby('taxon_name', dropna=False)['reads'].sum()
+    
+    if sample not in data[tax_level]:
+        data[tax_level][sample] = grouped_reads
+    else:
+        data[tax_level][sample] = data[tax_level][sample].add(grouped_reads, fill_value=0)
+
+print(f"\nTotal matched files processed: {matched_files}")
+
+if matched_files == 0:
+    print("No matching files found. Please check your file names and regex pattern.")
+else:
+    excel_path = "kaiju_summary_combined.xlsx"
+    with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
+        for tax_level in tax_levels:
+            if not data[tax_level]:
+                print(f"No data found for taxonomic level: {tax_level}")
+                continue
+            
+            df_combined = pd.concat(data[tax_level].values(), axis=1, keys=data[tax_level].keys())
+            df_combined = df_combined.fillna(0).astype(int)
+            
+            df_combined.columns = df_combined.columns.get_level_values(0)
+            
+            df_combined['Total'] = df_combined.sum(axis=1)
+            
+            df_combined = df_combined.reset_index().rename(columns={"taxon_name": f"{tax_level}_name"})
+            
+            cols = [f"{tax_level}_name"] + sorted(data[tax_level].keys()) + ['Total']
+            df_combined = df_combined[cols]
+            
+            sheet_name = tax_level[:31]
+            df_combined.to_excel(writer, sheet_name=sheet_name, index=False)
+            print(f"Written sheet '{sheet_name}' with {df_combined.shape[0]} rows")
+
+    print(f"\nSaved combined Kaiju report summary to '{excel_path}'")
+
