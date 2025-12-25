@@ -1,0 +1,11 @@
+#This script reads and prints the taxa in a file to indentify when "unclassified" is present, catch cases where the class description is missing, and see percent values so that I can spot classes with less than 0.5%.
+
+file_path = "kaiju_reports/CONGO_065_metagenome_interleaved.fastq.gz_reads-1-class"
+
+with open(file_path, "r") as file:
+    for line in file:
+        if "unclassified" in line.lower() or "cannot be assigned" in line.lower() or "NA" in line:
+            print("[MATCH]", line.strip())
+        else:
+            print(line.strip())
+
