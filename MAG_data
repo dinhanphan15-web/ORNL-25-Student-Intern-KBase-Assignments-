@@ -1,4 +1,4 @@
-This script was used to compile summary statistics for Metagenome-Assembled Genomes (MAGs). 
+#This script was used to compile summary statistics for Metagenome-Assembled Genomes (MAGs). This includes contig count, GC content, and genome size. 
 
 pip install pandas openpyxl
 
@@ -37,6 +37,7 @@ df.index.name = "Assembly_Name"
 df.to_excel("MAG_summary_stats.xlsx")
 print("Summary exported to MAG_summary_stats.xlsx")
 
+#This next section is specific to KBase, as it is the KBase workspace reference. It was used in KBase batch export to retrieve assembly JSON files from the workspace. 
 permids = [
     '224074/2/2', '224074/3/2', '224074/4/2', '224074/5/2', '224074/6/2',
     '224074/7/2', '224074/8/2', '224074/9/2', '224074/10/2', '224074/11/2',
