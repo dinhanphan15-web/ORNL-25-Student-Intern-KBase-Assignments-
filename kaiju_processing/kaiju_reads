@@ -1,4 +1,4 @@
-This script processes Kaiju regular and longtail reports and summarizes read counts at the class and phylum level.
+#This script processes Kaiju regular and longtail reports and summarizes read counts across all taxonomic levels for each sample.
 
 
 
